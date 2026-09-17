@@ -13,30 +13,36 @@ with ⌘V in whatever app you were using.
 
 Requires macOS 14 Sonoma or later on Apple Silicon. On macOS 26 Tahoe the panel uses Liquid Glass.
 
-## Getting it
+## Download
 
-There is no packaged download yet, so you build it yourself. It takes about two minutes.
+Grab the latest `.dmg` from the [Releases page](../../releases/latest), open it, and drag
+**Clipboard Manager** into **Applications**. Then launch it from Applications (or Spotlight).
 
-1. Install Xcode from the Mac App Store (Xcode 16 or newer) and open it once to finish setup.
-2. Clone this repository:
-   ```sh
-   git clone https://github.com/YOUR-GITHUB-USERNAME/ClipboardManager.git
-   cd ClipboardManager
-   ```
-3. Build and install to `/Applications`:
-   ```sh
-   Scripts/build-release.sh
-   ```
-   The script builds a Release copy, installs it as `/Applications/ClipboardManager.app`, and launches it.
+**First launch on an unsigned build.** Until releases are signed with an Apple Developer ID, macOS
+will say it "cannot verify that this app is free of malware" and refuse to open it. That is
+Gatekeeper, not a fault in the download. To approve it once:
 
-If Xcode is installed but the script says `xcodebuild requires Xcode`, point the tools at it once:
+1. Try to open the app and dismiss the warning.
+2. Open **System Settings → Privacy & Security**, scroll down to the Security section.
+3. Click **Open Anyway** next to the Clipboard Manager message, then confirm.
+
+Or from a terminal: `xattr -dr com.apple.quarantine /Applications/ClipboardManager.app`.
+
+Every release ships a `SHA256SUMS` file if you want to verify the download.
+
+## Building from source
+
+Requires Xcode 16 or newer from the Mac App Store.
 
 ```sh
-sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+git clone https://github.com/YOUR-GITHUB-USERNAME/ClipboardManager.git
+cd ClipboardManager
+Scripts/build-release.sh      # builds a Release copy, installs to /Applications, launches it
 ```
 
-Alternatively open `ClipboardManager.xcodeproj` in Xcode and press Run. The app is ad-hoc signed,
-which is fine for running on your own Mac; a signed and notarized download is planned.
+If the script says `xcodebuild requires Xcode`, point the command-line tools at Xcode once:
+`sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`. Or open
+`ClipboardManager.xcodeproj` in Xcode and press Run.
 
 ## First run
 
@@ -105,27 +111,45 @@ Quit from the menu bar, then delete `/Applications/ClipboardManager.app` and
 `~/Library/Application Support/ClipboardManager`. If Launch at Login was on, turn it off in the
 menu first or remove the entry in System Settings → General → Login Items.
 
-## Distributing it (signing, notarization, updates)
+## Releasing (maintainers)
 
-Your own builds are ad-hoc signed and run fine locally. To hand the app to other people you need a
-Developer ID certificate, notarization, and (optionally) a Sparkle update feed. `Scripts/release.sh`
-does all of it:
+Releases are built by GitHub Actions. Tag a commit and push the tag:
 
 ```sh
-# one time: create a notarytool profile and Sparkle keys
-xcrun notarytool store-credentials notary --apple-id you@example.com --team-id TEAMID
-build/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_keys   # paste the public key into Supporting/Info.plist (SUPublicEDKey)
-# set SUFeedURL in Supporting/Info.plist to where appcast.xml will live
-
-SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)" NOTARY_PROFILE=notary \
-APPCAST_DOWNLOAD_PREFIX=https://github.com/you/ClipboardManager/releases/download/v1.0/ \
-Scripts/release.sh
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
-This produces `dist/ClipboardManager-<version>.zip` (notarized and stapled) and `dist/appcast.xml`.
-Until a public key and feed URL are present in `Info.plist`, the in-app updater stays disabled and
-"Check for Updates…" explains why. Update checks are the only network activity in the app and are
-off unless the user turns them on.
+The **Release** workflow builds the app, packages a `.dmg` and `.zip`, writes `SHA256SUMS`, and
+publishes a GitHub Release with everything attached. The tag sets the version number.
+
+The same thing locally: `Scripts/release.sh` writes the artifacts to `dist/`.
+
+### Signing and notarization
+
+Without an Apple Developer account the build is ad-hoc signed and users must approve it once (see
+Download). With one, add these repository secrets and the workflow signs and notarizes automatically:
+
+| Secret | Value |
+| --- | --- |
+| `MACOS_CERTIFICATE_P12_BASE64` | your *Developer ID Application* certificate exported from Keychain Access as `.p12`, then `base64 -i cert.p12 \| pbcopy` |
+| `MACOS_CERTIFICATE_PASSWORD` | the password you set when exporting the `.p12` |
+| `SIGNING_IDENTITY` | `Developer ID Application: Your Name (TEAMID)` (from `security find-identity -v -p codesigning`) |
+| `APPLE_ID` / `APPLE_TEAM_ID` / `APPLE_APP_PASSWORD` | Apple ID, team ID, and an [app-specific password](https://support.apple.com/102654) for notarization |
+
+### In-app updates (Sparkle)
+
+Optional. Once set up, users get update prompts instead of re-downloading.
+
+1. Build once so Swift Package Manager fetches Sparkle, then run
+   `build/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_keys`.
+2. Put the printed public key into `Supporting/Info.plist` as `SUPublicEDKey`, and set `SUFeedURL` to
+   `https://github.com/YOUR-GITHUB-USERNAME/ClipboardManager/releases/latest/download/appcast.xml`.
+3. Export the private key (`generate_keys -x key.txt`) and add its contents as the `SPARKLE_PRIVATE_KEY` secret.
+
+The Release workflow then attaches a signed `appcast.xml` to every release. Until steps 1–2 are done
+the updater stays disabled and "Check for Updates…" explains why. Update checks are the only network
+activity in the app, and they are off unless the user turns them on.
 
 ## For developers
 
@@ -162,8 +186,8 @@ ClipboardManager/
   Support/    caches, formatters, code-detection heuristic
 ClipboardManagerTests/   XCTest unit tests
 Supporting/Info.plist    LSUIElement agent app
-.github/workflows/       CI (build + tests on a macOS runner)
-Scripts/                 build-release.sh (local install), release.sh (signed + notarized + appcast),
+.github/workflows/       ci.yml (build + tests on every push), release.yml (tag → GitHub Release)
+Scripts/                 build-release.sh (local install), release.sh (dmg/zip, optional signing + notarization + appcast),
                          make-icon.swift (regenerates the app icon), debug-command.swift
 ```
 
