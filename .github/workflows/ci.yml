@@ -26,10 +26,13 @@ jobs:
       - name: Build and run unit tests
         run: |
           set -o pipefail
+          mkdir -p build
           xcodebuild -project ClipboardManager.xcodeproj -scheme ClipboardManager \
             -destination 'platform=macOS' -derivedDataPath build \
-            CODE_SIGN_IDENTITY=- test | tee build/xcodebuild.log | grep -E "Test Case|error:|warning: .*ClipboardManager|BUILD|TEST" || true
-          grep -q "TEST SUCCEEDED" build/xcodebuild.log
+            CODE_SIGN_IDENTITY=- test 2>&1 | tee build/xcodebuild.log \
+            | grep -E "Test Case|error:|warning: .*ClipboardManager|BUILD|TEST"
+          # pipefail means a non-zero xcodebuild exit (test failure or build error) fails this step
+          # even though grep above always exits 0 when it finds matches.
 
       - name: Upload test results
         if: always()

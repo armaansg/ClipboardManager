@@ -31,8 +31,9 @@ jobs:
           xcodebuild -version
 
       - name: Import Developer ID certificate
-        if: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 != '' }}
+        if: env.HAS_CERT == 'true'
         env:
+          HAS_CERT: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 != '' }}
           P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
           P12_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
         run: |
@@ -48,8 +49,9 @@ jobs:
           rm "$RUNNER_TEMP/cert.p12"
 
       - name: Write Sparkle private key
-        if: ${{ secrets.SPARKLE_PRIVATE_KEY != '' }}
+        if: env.HAS_SPARKLE_KEY == 'true'
         env:
+          HAS_SPARKLE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY != '' }}
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
           echo "$SPARKLE_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle_private_key"
@@ -83,8 +85,9 @@ jobs:
             Requires macOS 14 Sonoma or later on Apple silicon.
 
       - name: Update Homebrew cask
-        if: ${{ secrets.TAP_GITHUB_TOKEN != '' }}
+        if: env.HAS_TAP_TOKEN == 'true'
         env:
+          HAS_TAP_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN != '' }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
