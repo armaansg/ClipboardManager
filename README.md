@@ -26,6 +26,8 @@ brew tap armaansg/tap
 brew install --cask clipboard-manager
 ```
 
+NOTE: If you do not have Xcode command-line-tools downloaded or git downloaded, manually download the `.dmg` from the release link below.
+
 Homebrew always quarantines cask downloads (it dropped the old `--no-quarantine` bypass), so an
 unsigned build still needs the one-time Gatekeeper approval described below.
 
