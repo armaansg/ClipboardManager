@@ -19,10 +19,11 @@ Requires macOS 14 Sonoma or later on Apple Silicon. On macOS 26 Tahoe the panel 
 
 ```sh
 brew tap armaansg/tap
-brew install --cask --no-quarantine clipboard-manager
+brew install --cask clipboard-manager
 ```
 
-`--no-quarantine` skips the Gatekeeper prompt described below; drop it once releases are signed.
+Homebrew always quarantines cask downloads (it dropped the old `--no-quarantine` bypass), so an
+unsigned build still needs the one-time Gatekeeper approval described below.
 
 **Manual:** grab the latest `.dmg` from the [Releases page](../../releases/latest), open it, and drag
 **Clipboard Manager** into **Applications**. Then launch it from Applications (or Spotlight).
