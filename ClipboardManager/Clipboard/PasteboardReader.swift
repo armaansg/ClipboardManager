@@ -80,11 +80,12 @@ enum PasteboardReader {
         // 4. Text, plain or rich.
         let rtf = pasteboard.data(forType: .rtf)
         let html = pasteboard.data(forType: .html)
-        if let plain, !plain.isEmpty {
+        if let plain, !trimmed.isEmpty {
             return .captured(CapturedPayload(content: .text(plain, rtf: rtf, isRich: rtf != nil || html != nil),
                                              hashInput: Data(plain.utf8)))
         }
-        if let rtf, let attributed = NSAttributedString(rtf: rtf, documentAttributes: nil), !attributed.string.isEmpty {
+        if let rtf, let attributed = NSAttributedString(rtf: rtf, documentAttributes: nil),
+           !attributed.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return .captured(CapturedPayload(content: .text(attributed.string, rtf: rtf, isRich: true),
                                              hashInput: Data(attributed.string.utf8)))
         }

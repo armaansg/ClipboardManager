@@ -13,7 +13,7 @@ final class ClipboardMonitor {
     private var timer: DispatchSourceTimer?
     private var timerSuspended = false
     private var lastChangeCount: Int
-    private var expectedSelfWrite: (changeCount: Int, itemID: String)?
+    private var expectedSelfWriteItemID: String?
     private let stateLock = NSLock()
 
     /// When true the poll timer is suspended entirely; nothing is read from the pasteboard.
@@ -49,11 +49,18 @@ final class ClipboardMonitor {
         self.timer = nil
     }
 
-    /// Tells the monitor that the next pasteboard change with this changeCount was written by the app itself,
-    /// so the existing row should be moved to the front instead of being captured again.
-    func expectSelfWrite(changeCount: Int, itemID: String) {
+    /// Call *before* writing to the pasteboard: the next change is then treated as the app's own write and the
+    /// existing row is moved to the front instead of being captured again.
+    func expectSelfWrite(itemID: String) {
         stateLock.lock()
-        expectedSelfWrite = (changeCount, itemID)
+        expectedSelfWriteItemID = itemID
+        stateLock.unlock()
+    }
+
+    /// Clears a pending self-write expectation (when the write failed).
+    func cancelSelfWrite() {
+        stateLock.lock()
+        expectedSelfWriteItemID = nil
         stateLock.unlock()
     }
 
@@ -69,7 +76,9 @@ final class ClipboardMonitor {
     private func resume() {
         guard let timer, timerSuspended else { return }
         // Anything copied while paused stays unrecorded.
+        stateLock.lock()
         lastChangeCount = NSPasteboard.general.changeCount
+        stateLock.unlock()
         timer.resume()
         timerSuspended = false
         Self.log.info("Recording resumed")
@@ -80,17 +89,19 @@ final class ClipboardMonitor {
     private func tick() {
         let pasteboard = NSPasteboard.general
         let count = pasteboard.changeCount
-        guard count != lastChangeCount else { return }
-        lastChangeCount = count
-
         stateLock.lock()
-        let selfWrite = expectedSelfWrite
-        expectedSelfWrite = nil
+        guard count != lastChangeCount else {
+            stateLock.unlock()
+            return
+        }
+        lastChangeCount = count
+        let selfWriteID = expectedSelfWriteItemID
+        expectedSelfWriteItemID = nil
         stateLock.unlock()
 
-        if let selfWrite, selfWrite.changeCount == count {
-            store.touch(id: selfWrite.itemID)
-            Self.log.debug("Own write detected; item \(selfWrite.itemID, privacy: .public) moved to front")
+        if let selfWriteID {
+            store.touch(id: selfWriteID)
+            Self.log.debug("Own write detected; item \(selfWriteID, privacy: .public) moved to front")
             return
         }
 
@@ -100,12 +111,18 @@ final class ClipboardMonitor {
     }
 
     /// Main thread: reads the pasteboard and the frontmost app, then hands off to the processing queue.
-    private func capture(changeCount: Int) {
+    private func capture(changeCount: Int, attempt: Int = 0) {
         let pasteboard = NSPasteboard.general
         guard pasteboard.changeCount == changeCount else { return } // superseded already
         let source = SourceApp.frontmost()
 
         switch PasteboardReader.read(pasteboard) {
+        case .skipped(.empty) where attempt < 2:
+            // Apps call clearContents() (which bumps changeCount) and then add data. If the poll landed in
+            // that gap the pasteboard looks empty; look again shortly, as long as nothing newer replaced it.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                self?.capture(changeCount: changeCount, attempt: attempt + 1)
+            }
         case .skipped(let reason):
             Self.log.info("Skipped pasteboard change #\(changeCount): \(reason.rawValue, privacy: .public)")
         case .captured(let payload):

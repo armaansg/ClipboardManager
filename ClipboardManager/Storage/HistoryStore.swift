@@ -135,6 +135,7 @@ final class HistoryStore: @unchecked Sendable {
         var item = incoming
         queue.sync {
             do {
+                try db.exec("BEGIN IMMEDIATE")
                 let duplicates = try db.query("SELECT \(Self.columns) FROM items WHERE content_hash = ?",
                                               [.text(item.contentHash)], Self.mapRow)
                 for old in duplicates {
@@ -147,10 +148,12 @@ final class HistoryStore: @unchecked Sendable {
                 try db.run("""
                 INSERT INTO items (\(Self.columns)) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, values(for: item))
+                try db.exec("COMMIT")
                 if !duplicates.isEmpty {
                     Self.log.info("Collapsed \(duplicates.count) duplicate(s) of \(item.type.rawValue, privacy: .public) item; moved to front")
                 }
             } catch {
+                try? db.exec("ROLLBACK")
                 Self.log.error("save failed: \(String(describing: error), privacy: .public)")
             }
         }

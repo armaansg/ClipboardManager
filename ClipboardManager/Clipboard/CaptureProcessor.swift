@@ -30,6 +30,10 @@ enum CaptureProcessor {
 
         switch payload.content {
         case .text(let text, let rtf, let isRich):
+            guard Int64(text.utf8.count) <= AppConfig.maxItemBytes else {
+                log.notice("Skipping text: \(text.utf8.count) bytes exceeds cap")
+                return nil
+            }
             item.type = .text
             item.content = text
             item.previewText = makePreview(text)
@@ -83,10 +87,9 @@ enum CaptureProcessor {
             item.content = ClipItem.encodeFilePaths(paths)
             item.title = urls.first?.lastPathComponent
             item.previewText = urls.map(\.lastPathComponent).joined(separator: "\n")
-            item.byteSize = urls.reduce(Int64(0)) { total, url in
-                let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-                return total + Int64(size)
-            }
+            // Only the reference is stored, so only its footprint counts toward the store cap.
+            // The referenced files' sizes are read from disk when the card is drawn.
+            item.byteSize = Int64(item.content.utf8.count)
             item.uti = NSPasteboard.PasteboardType.fileURL.rawValue
         }
         return item

@@ -86,12 +86,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Selection → pasteboard
 
     private func copyBackToPasteboard(_ item: ClipItem) {
-        guard let changeCount = PasteboardWriter.write(item, blobs: store.blobs) else {
+        // Flag first so the poller can never observe the change before it knows it is ours.
+        monitor.expectSelfWrite(itemID: item.id)
+        guard PasteboardWriter.write(item, blobs: store.blobs) != nil else {
+            monitor.cancelSelfWrite()
             Self.log.error("Failed to write item \(item.id, privacy: .public) back to the pasteboard")
             return
         }
-        // The poller will see this change; tell it to bump the existing row instead of re-capturing.
-        monitor.expectSelfWrite(changeCount: changeCount, itemID: item.id)
     }
 
     // MARK: - Retention
@@ -161,6 +162,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let front = NSWorkspace.shared.frontmostApplication
             Self.log.info("DEBUG status: panelVisible=\(self.panelController.isVisible) panelIsKey=\(self.panelController.panel.isKeyWindow) appActive=\(NSApp.isActive) frontmost=\(front?.bundleIdentifier ?? "nil", privacy: .public) items=\(self.store.count()) paused=\(self.monitor.isPaused)")
         case "retention": self.runRetention()
+        case "pause": self.monitor.isPaused = true; self.statusItemController.refreshAppearance()
+        case "resume": self.monitor.isPaused = false; self.statusItemController.refreshAppearance()
+        case "clear": self.store.clear(includingPinned: argument == "all")
         default: Self.log.info("DEBUG unknown command \(command, privacy: .public)")
         }
     }

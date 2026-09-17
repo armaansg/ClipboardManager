@@ -113,7 +113,7 @@ struct FileCardContent: View {
                     Text(item.title ?? "File")
                         .font(.callout.weight(.semibold))
                         .lineLimit(2)
-                    Text(Formatters.bytes(item.byteSize))
+                    Text(FileSizeCache.shared.description(forPaths: paths))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

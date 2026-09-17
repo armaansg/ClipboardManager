@@ -64,6 +64,32 @@ final class FileIconCache {
     }
 }
 
+/// Sizes of referenced files, read from disk once per path set.
+final class FileSizeCache {
+    static let shared = FileSizeCache()
+    private var sizes: [String: String] = [:]
+    private let lock = NSLock()
+
+    func description(forPaths paths: [String]) -> String {
+        let key = paths.joined(separator: "\u{0}")
+        lock.lock()
+        defer { lock.unlock() }
+        if let cached = sizes[key] { return cached }
+        var total: Int64 = 0
+        var missing = 0
+        for path in paths {
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: path), let size = attrs[.size] as? Int64 {
+                total += size
+            } else {
+                missing += 1
+            }
+        }
+        let text = missing == paths.count ? "Missing" : Formatters.bytes(total) + (missing > 0 ? " (some missing)" : "")
+        sizes[key] = text
+        return text
+    }
+}
+
 enum Formatters {
     private static let byteFormatter: ByteCountFormatter = {
         let f = ByteCountFormatter()

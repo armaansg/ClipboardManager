@@ -12,9 +12,9 @@ enum AppConfig {
     // Change the shortcut by editing this single constant.
     //   keyCode:   a Carbon virtual key code (kVK_ANSI_A ... kVK_Space, kVK_F1 ...). See Carbon.HIToolbox/Events.h.
     //   modifiers: any combination of .command, .shift, .option, .control.
-    // Default is Control-Shift-V, which no common app binds by default.
+    // Default is Command-Shift-V. Note: many apps bind this to "Paste and Match Style"; a global hot key wins while this app runs.
     // The change takes effect on next launch (or rebuild). The menu bar item shows the current binding.
-    static let toggleHotKey = HotKeyDefinition(keyCode: UInt32(kVK_ANSI_V), modifiers: [.control, .shift])
+    static let toggleHotKey = HotKeyDefinition(keyCode: UInt32(kVK_ANSI_V), modifiers: [.command, .shift])
 
     // MARK: Capture
     static let pollInterval: TimeInterval = 0.3
