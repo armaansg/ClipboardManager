@@ -7,6 +7,8 @@ name: Release
 #   SIGNING_IDENTITY              e.g. "Developer ID Application: Your Name (TEAMID)"
 #   APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD   notarytool credentials (app-specific password)
 #   SPARKLE_PRIVATE_KEY           (optional) EdDSA private key for appcast signing
+#   TAP_GITHUB_TOKEN              (optional) fine-grained PAT with Contents: write on armaansg/homebrew-tap;
+#                                 when present the cask there is bumped to this release automatically
 
 on:
   push:
@@ -79,3 +81,18 @@ jobs:
             If macOS says it cannot verify the app (unsigned build), open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**.
 
             Requires macOS 14 Sonoma or later on Apple silicon.
+
+      - name: Update Homebrew cask
+        if: ${{ secrets.TAP_GITHUB_TOKEN != '' }}
+        env:
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SHA=$(grep "ClipboardManager-$VERSION.dmg" dist/SHA256SUMS | awk '{print $1}')
+          git clone "https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/armaansg/homebrew-tap.git" "$RUNNER_TEMP/tap"
+          Scripts/update-cask.sh "$RUNNER_TEMP/tap/Casks/clipboard-manager.rb" "$VERSION" "$SHA"
+          cd "$RUNNER_TEMP/tap"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -am "clipboard-manager $VERSION" || echo "cask already current"
+          git push

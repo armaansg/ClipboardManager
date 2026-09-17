@@ -15,7 +15,16 @@ Requires macOS 14 Sonoma or later on Apple Silicon. On macOS 26 Tahoe the panel 
 
 ## Download
 
-Grab the latest `.dmg` from the [Releases page](../../releases/latest), open it, and drag
+**Homebrew** (recommended):
+
+```sh
+brew tap armaansg/tap
+brew install --cask --no-quarantine clipboard-manager
+```
+
+`--no-quarantine` skips the Gatekeeper prompt described below; drop it once releases are signed.
+
+**Manual:** grab the latest `.dmg` from the [Releases page](../../releases/latest), open it, and drag
 **Clipboard Manager** into **Applications**. Then launch it from Applications (or Spotlight).
 
 **First launch on an unsigned build.** Until releases are signed with an Apple Developer ID, macOS
@@ -35,7 +44,7 @@ Every release ships a `SHA256SUMS` file if you want to verify the download.
 Requires Xcode 16 or newer from the Mac App Store.
 
 ```sh
-git clone https://github.com/YOUR-GITHUB-USERNAME/ClipboardManager.git
+git clone https://github.com/armaansg/ClipboardManager.git
 cd ClipboardManager
 Scripts/build-release.sh      # builds a Release copy, installs to /Applications, launches it
 ```
@@ -125,6 +134,17 @@ publishes a GitHub Release with everything attached. The tag sets the version nu
 
 The same thing locally: `Scripts/release.sh` writes the artifacts to `dist/`.
 
+### Homebrew tap
+
+The cask lives in [armaansg/homebrew-tap](https://github.com/armaansg/homebrew-tap)
+(`Casks/clipboard-manager.rb`). With a `TAP_GITHUB_TOKEN` repository secret (a fine-grained personal
+access token with *Contents: write* on the tap repo), the Release workflow bumps the cask's version and
+checksum on every tagged release. To do it by hand:
+
+```sh
+Scripts/update-cask.sh ../homebrew-tap/Casks/clipboard-manager.rb 1.0.1 <sha256 of the dmg>
+```
+
 ### Signing and notarization
 
 Without an Apple Developer account the build is ad-hoc signed and users must approve it once (see
@@ -144,7 +164,7 @@ Optional. Once set up, users get update prompts instead of re-downloading.
 1. Build once so Swift Package Manager fetches Sparkle, then run
    `build/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_keys`.
 2. Put the printed public key into `Supporting/Info.plist` as `SUPublicEDKey`, and set `SUFeedURL` to
-   `https://github.com/YOUR-GITHUB-USERNAME/ClipboardManager/releases/latest/download/appcast.xml`.
+   `https://github.com/armaansg/ClipboardManager/releases/latest/download/appcast.xml`.
 3. Export the private key (`generate_keys -x key.txt`) and add its contents as the `SPARKLE_PRIVATE_KEY` secret.
 
 The Release workflow then attaches a signed `appcast.xml` to every release. Until steps 1–2 are done
