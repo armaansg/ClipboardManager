@@ -4,7 +4,7 @@ import Foundation
 /// Registers a system-wide hot key through Carbon's RegisterEventHotKey.
 /// This path needs no Accessibility permission, unlike CGEventTap / global NSEvent key monitors.
 final class HotKeyManager {
-    private let definition: HotKeyDefinition
+    private(set) var definition: HotKeyDefinition
     private let handler: () -> Void
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
@@ -38,6 +38,13 @@ final class HotKeyManager {
         let status = RegisterEventHotKey(definition.keyCode, definition.carbonModifiers, hotKeyID,
                                          GetApplicationEventTarget(), 0, &hotKeyRef)
         return status == noErr ? nil : status
+    }
+
+    /// Swaps the binding at runtime. Returns nil on success, otherwise the failing OSStatus (the old binding is gone either way).
+    @discardableResult
+    func rebind(to newDefinition: HotKeyDefinition) -> OSStatus? {
+        definition = newDefinition
+        return register()
     }
 
     func unregister() {

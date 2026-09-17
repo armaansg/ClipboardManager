@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Root SwiftUI content of the clipboard panel: header with filter, then the horizontal card row.
+/// Root SwiftUI content of the clipboard panel: header with search and filter, then the horizontal card row.
 struct PanelView: View {
     @EnvironmentObject private var viewModel: PanelViewModel
+    @EnvironmentObject private var settings: AppSettings
     @Environment(\.colorScheme) private var colorScheme
 
     private var panelShape: UnevenRoundedRectangle {
@@ -33,7 +34,7 @@ struct PanelView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Image(systemName: "doc.on.clipboard")
                 .foregroundStyle(.secondary)
             Text("Clipboard")
@@ -41,10 +42,12 @@ struct PanelView: View {
             Text(countLabel)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Spacer()
+            Spacer(minLength: 8)
+            SearchPill(text: viewModel.searchText, onClear: { viewModel.clearSearch() })
+            Spacer(minLength: 8)
             FilterMenu(selection: $viewModel.filter)
         }
-        .frame(height: 24)
+        .frame(height: 26)
     }
 
     private var countLabel: String {
@@ -64,14 +67,14 @@ struct PanelView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(alignment: .top, spacing: 12) {
                             ForEach(pinned) { item in
-                                CardView(item: item, height: geometry.size.height)
+                                CardView(item: item, height: geometry.size.height, quickIndex: viewModel.quickIndex(for: item))
                                     .id(item.id)
                             }
                             if !pinned.isEmpty && !recent.isEmpty {
                                 SectionDivider(height: geometry.size.height)
                             }
                             ForEach(recent) { item in
-                                CardView(item: item, height: geometry.size.height)
+                                CardView(item: item, height: geometry.size.height, quickIndex: viewModel.quickIndex(for: item))
                                     .id(item.id)
                             }
                         }
@@ -90,16 +93,64 @@ struct PanelView: View {
 
     private var emptyState: some View {
         VStack(spacing: 6) {
-            Image(systemName: viewModel.filter == .all ? "clipboard" : viewModel.filter.symbolName)
+            Image(systemName: viewModel.isSearching ? "magnifyingglass" : (viewModel.filter == .all ? "clipboard" : viewModel.filter.symbolName))
                 .font(.system(size: 26, weight: .light))
                 .foregroundStyle(.secondary)
-            Text(viewModel.filter == .all ? "Nothing copied yet" : "No \(viewModel.filter.rawValue.lowercased()) in history")
+            Text(emptyTitle)
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            Text("Items you copy will appear here. Press \(AppConfig.toggleHotKey.displayString) to toggle this panel.")
+            Text(emptyHint)
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
+    }
+
+    private var emptyTitle: String {
+        if viewModel.isSearching { return "No results for “\(viewModel.searchText)”" }
+        if viewModel.filter != .all { return "No \(viewModel.filter.rawValue.lowercased()) in history" }
+        return "Nothing copied yet"
+    }
+
+    private var emptyHint: String {
+        if viewModel.isSearching { return "Press Delete to edit the search or Esc to clear it." }
+        return "Items you copy will appear here. Press \(settings.hotKey.displayString) to toggle this panel, type to search, ⌘1–9 to grab a card."
+    }
+}
+
+/// Shows the live type-to-search query. There is no text field: keystrokes are routed by the panel.
+struct SearchPill: View {
+    let text: String
+    let onClear: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            if text.isEmpty {
+                Text("Type to search")
+                    .foregroundStyle(.tertiary)
+            } else {
+                Text(text)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                Rectangle()
+                    .fill(Color.accentColor)
+                    .frame(width: 1.5, height: 14)
+                Button(action: onClear) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Clear search (Esc)")
+            }
+        }
+        .font(.subheadline)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .frame(minWidth: 180, maxWidth: 360)
+        .background(Capsule().fill(Color.primary.opacity(text.isEmpty ? 0.05 : 0.1)))
+        .overlay(Capsule().strokeBorder(text.isEmpty ? Color.primary.opacity(0.1) : Color.accentColor.opacity(0.6), lineWidth: 1))
+        .animation(.easeOut(duration: 0.12), value: text.isEmpty)
     }
 }
 

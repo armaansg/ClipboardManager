@@ -3,30 +3,33 @@ import SwiftUI
 import os
 
 /// Owns the bottom-anchored clipboard panel: sizing on the active display, slide animation,
-/// key handling, all dismissal paths, and the hover preview.
+/// key handling (navigation, search, quick keys), all dismissal paths, and the hover preview.
 @MainActor
 final class PanelController: NSObject, NSWindowDelegate {
     private static let log = Logger(subsystem: AppConfig.bundleID, category: "panel")
 
     let panel: ClipboardPanel
     let viewModel: PanelViewModel
+    private let settings: AppSettings
     private let hostingView: NSHostingView<AnyView>
     private let hoverPreview = HoverPreviewController()
+    private let copiedHUD = CopiedHUDController()
     private(set) var isVisible = false
     private var lastResignHide = Date.distantPast
 
-    /// Invoked when the user picks an item (click or Return). The panel hides itself afterwards.
-    var onItemSelected: ((ClipItem) -> Void)?
+    /// Invoked when the user picks an item (click, Return, ⌘digit). The panel hides itself afterwards.
+    var onItemSelected: ((ClipItem, _ plainText: Bool) -> Void)?
 
-    init(viewModel: PanelViewModel) {
+    init(viewModel: PanelViewModel, settings: AppSettings) {
         self.viewModel = viewModel
+        self.settings = settings
         panel = ClipboardPanel()
 
         let background = GlassBackgroundView(cornerRadius: AppConfig.panelCornerRadius, roundsBottomCorners: false)
         background.frame = panel.contentView?.bounds ?? .zero
         background.autoresizingMask = [.width, .height]
 
-        hostingView = NSHostingView(rootView: AnyView(PanelView().environmentObject(viewModel)))
+        hostingView = NSHostingView(rootView: AnyView(PanelView().environmentObject(viewModel).environmentObject(settings)))
         hostingView.frame = background.bounds
         hostingView.autoresizingMask = [.width, .height]
         hostingView.sizingOptions = []
@@ -39,10 +42,12 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.keyCommandHandler = { [weak self] command in
             self?.handle(command) ?? false
         }
-        viewModel.onSelect = { [weak self] item in
+        viewModel.onSelect = { [weak self] item, plainText in
             guard let self else { return }
-            self.onItemSelected?(item)
+            let screen = self.panel.screen ?? Self.activeScreen()
+            self.onItemSelected?(item, plainText)
             self.hide()
+            self.copiedHUD.show(for: item, plainText: plainText, on: screen)
         }
         viewModel.onHover = { [weak self] item, frame in
             self?.hoverChanged(item: item, frame: frame)
@@ -64,7 +69,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     func show() {
         guard !isVisible else { return }
         let screen = Self.activeScreen()
-        let target = Self.panelFrame(on: screen)
+        let target = panelFrame(on: screen)
         var start = target
         start.origin.y -= target.height
 
@@ -117,15 +122,27 @@ final class PanelController: NSObject, NSWindowDelegate {
     private func handle(_ command: ClipboardPanel.KeyCommand) -> Bool {
         switch command {
         case .escape:
-            hide()
+            if viewModel.isSearching {
+                viewModel.clearSearch()
+            } else {
+                hide()
+            }
         case .left:
             viewModel.moveSelection(by: -1)
         case .right:
             viewModel.moveSelection(by: 1)
-        case .confirm:
-            viewModel.activateSelection()
-        case .delete:
+        case .confirm(let plain):
+            viewModel.activateSelection(optionHeld: plain)
+        case .deleteBackward:
+            if !viewModel.deleteSearchBackward() {
+                viewModel.deleteSelection()
+            }
+        case .deleteItem:
             viewModel.deleteSelection()
+        case .quickSelect(let index, let plain):
+            viewModel.quickSelect(index: index, optionHeld: plain)
+        case .insertText(let text):
+            viewModel.appendSearch(text)
         }
         return true
     }
@@ -156,10 +173,10 @@ final class PanelController: NSObject, NSWindowDelegate {
         return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens[0]
     }
 
-    /// Full visible width, 20% of the visible height, anchored to the bottom of the visible frame.
-    static func panelFrame(on screen: NSScreen) -> NSRect {
+    /// Full visible width, a configurable fraction of the visible height, anchored to the bottom of the visible frame.
+    func panelFrame(on screen: NSScreen) -> NSRect {
         let visible = screen.visibleFrame
-        let height = (visible.height * AppConfig.panelHeightFraction).rounded()
+        let height = (visible.height * CGFloat(settings.panelHeightFraction)).rounded()
         return NSRect(x: visible.minX, y: visible.minY, width: visible.width, height: height)
     }
 }

@@ -101,6 +101,18 @@ enum Formatters {
     static func bytes(_ count: Int64) -> String {
         byteFormatter.string(fromByteCount: count)
     }
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        f.dateTimeStyle = .named
+        return f
+    }()
+
+    static func relative(_ date: Date, now: Date = Date()) -> String {
+        if now.timeIntervalSince(date) < 45 { return "just now" }
+        return relativeFormatter.localizedString(for: date, relativeTo: now)
+    }
 }
 
 enum TextHeuristics {

@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import os
 
 @main
@@ -19,13 +20,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // Everything below is retained for the lifetime of the app. NSStatusItem in particular
     // disappears from the menu bar the moment it is deallocated.
+    private let settings = AppSettings.shared
     private var store: HistoryStore!
     private var monitor: ClipboardMonitor!
     private var viewModel: PanelViewModel!
     private var panelController: PanelController!
     private var statusItemController: StatusItemController!
     private var hotKeyManager: HotKeyManager!
+    private var updateManager: UpdateManager!
+    private var settingsWindow: SettingsWindowController!
+    private var welcomeTip: WelcomeTipController!
     private var retentionTimer: Timer?
+    private var cancellables: Set<AnyCancellable> = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
@@ -41,13 +47,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        viewModel = PanelViewModel(store: store)
-        panelController = PanelController(viewModel: viewModel)
+        updateManager = UpdateManager()
+        viewModel = PanelViewModel(store: store, settings: settings)
+        panelController = PanelController(viewModel: viewModel, settings: settings)
         monitor = ClipboardMonitor(store: store)
 
-        panelController.onItemSelected = { [weak self] item in
-            self?.copyBackToPasteboard(item)
+        panelController.onItemSelected = { [weak self] item, plainText in
+            self?.copyBackToPasteboard(item, plainText: plainText)
         }
+
+        settingsWindow = SettingsWindowController(
+            settings: settings, updates: updateManager,
+            onClearHistory: { [weak self] includingPinned in self?.store.clear(includingPinned: includingPinned) },
+            storageDescription: { [weak self] in self?.storageDescription() ?? "" }
+        )
+        welcomeTip = WelcomeTipController(
+            settings: settings,
+            openSettings: { [weak self] in self?.settingsWindow.show() },
+            showPanel: { [weak self] in self?.panelController.show() }
+        )
 
         statusItemController = StatusItemController(actions: .init(
             togglePanel: { [weak self] in self?.panelController.toggle() },
@@ -59,21 +77,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openStorageFolder: { [weak self] in
                 guard let self else { return }
                 NSWorkspace.shared.activateFileViewerSelecting([self.store.databaseURL])
-            }
+            },
+            openSettings: { [weak self] in self?.settingsWindow.show() },
+            checkForUpdates: { [weak self] in self?.updateManager.checkForUpdates() },
+            currentHotKey: { [weak self] in self?.settings.hotKey ?? AppConfig.toggleHotKey }
         ))
 
-        hotKeyManager = HotKeyManager(definition: AppConfig.toggleHotKey) { [weak self] in
+        hotKeyManager = HotKeyManager(definition: settings.hotKey) { [weak self] in
             self?.panelController.toggle()
         }
-        if let error = hotKeyManager.register() {
-            Self.log.error("Hot key registration failed (\(AppConfig.toggleHotKey.displayString, privacy: .public)): OSStatus \(error)")
-        } else {
-            Self.log.info("Registered global shortcut \(AppConfig.toggleHotKey.displayString, privacy: .public)")
-        }
+        reportHotKey(status: hotKeyManager.register())
+        settings.$hotKey
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] definition in
+                guard let self else { return }
+                self.reportHotKey(status: self.hotKeyManager.rebind(to: definition))
+                self.statusItemController.refreshAppearance()
+            }
+            .store(in: &cancellables)
 
         monitor.start()
         scheduleRetention()
         installDebugHooks()
+        welcomeTip.showIfNeeded()
 
         Self.log.info("\(AppConfig.displayName, privacy: .public) launched silently from \(Bundle.main.bundleURL.path, privacy: .public)")
     }
@@ -83,12 +110,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotKeyManager?.unregister()
     }
 
+    // MARK: - Hot key
+
+    private func reportHotKey(status: OSStatus?) {
+        let binding = settings.hotKey.displayString
+        if let status {
+            Self.log.error("Hot key registration failed (\(binding, privacy: .public)): OSStatus \(status)")
+            settings.hotKeyError = "Couldn't register \(binding) (error \(status)). Another app may already use it; pick a different combination."
+        } else {
+            settings.hotKeyError = nil
+            Self.log.info("Registered global shortcut \(binding, privacy: .public)")
+        }
+    }
+
     // MARK: - Selection → pasteboard
 
-    private func copyBackToPasteboard(_ item: ClipItem) {
+    private func copyBackToPasteboard(_ item: ClipItem, plainText: Bool) {
         // Flag first so the poller can never observe the change before it knows it is ours.
         monitor.expectSelfWrite(itemID: item.id)
-        guard PasteboardWriter.write(item, blobs: store.blobs) != nil else {
+        guard PasteboardWriter.write(item, blobs: store.blobs, plainText: plainText) != nil else {
             monitor.cancelSelfWrite()
             Self.log.error("Failed to write item \(item.id, privacy: .public) back to the pasteboard")
             return
@@ -109,16 +149,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func runRetention() {
         let store = self.store!
+        let maxAge = settings.retentionInterval
+        let cap = settings.storeCapBytes
         DispatchQueue.global(qos: .utility).async {
-            store.runRetention()
+            store.runRetention(maxAge: maxAge, capBytes: cap)
         }
     }
 
     private func storageDescription() -> String {
         let usage = store.storageUsage()
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: usage.database + usage.blobs)
+        return Formatters.bytes(usage.database + usage.blobs)
     }
 
     // MARK: - Debug hooks (not compiled into Release)
@@ -140,33 +180,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     #if DEBUG
     private func handleDebugCommand(_ command: String, argument: String?) {
         switch command {
+        case "toggle": panelController.toggle()
+        case "show": panelController.show()
+        case "hide": panelController.hide()
+        case "status":
+            let front = NSWorkspace.shared.frontmostApplication
+            Self.log.info("DEBUG status: panelVisible=\(self.panelController.isVisible) panelIsKey=\(self.panelController.panel.isKeyWindow) appActive=\(NSApp.isActive) frontmost=\(front?.bundleIdentifier ?? "nil", privacy: .public) items=\(self.store.count()) paused=\(self.monitor.isPaused) search='\(self.viewModel.searchText, privacy: .public)' visible=\(self.viewModel.orderedVisible.count) selected=\(self.viewModel.selectedID ?? "nil", privacy: .public) hotkey=\(self.settings.hotKey.displayString, privacy: .public)")
+        case "retention": runRetention()
+        case "pause": monitor.isPaused = true; statusItemController.refreshAppearance()
+        case "resume": monitor.isPaused = false; statusItemController.refreshAppearance()
+        case "clear": store.clear(includingPinned: argument == "all")
         case "snapshot":
-            // Renders the panel's view hierarchy offscreen (layout check only; the glass blur is composited by the window server).
-            guard let view = self.panelController.panel.contentView,
+            guard let view = panelController.panel.contentView,
                   let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
             view.cacheDisplay(in: view.bounds, to: rep)
             let path = argument ?? NSTemporaryDirectory() + "ClipboardManager-snapshot.png"
             try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
             Self.log.info("DEBUG snapshot written to \(path, privacy: .public)")
         case "pin-first":
-            if let first = self.store.allItems().first { self.store.setPinned(id: first.id, !first.pinned) }
-        case "filter":
-            self.viewModel.filter = FilterKind(rawValue: argument ?? "All") ?? .all
-        case "select-right": self.viewModel.moveSelection(by: 1)
-        case "select-left": self.viewModel.moveSelection(by: -1)
-        case "confirm": self.viewModel.activateSelection()
-        case "toggle": self.panelController.toggle()
-        case "show": self.panelController.show()
-        case "hide": self.panelController.hide()
-        case "status":
-            let front = NSWorkspace.shared.frontmostApplication
-            Self.log.info("DEBUG status: panelVisible=\(self.panelController.isVisible) panelIsKey=\(self.panelController.panel.isKeyWindow) appActive=\(NSApp.isActive) frontmost=\(front?.bundleIdentifier ?? "nil", privacy: .public) items=\(self.store.count()) paused=\(self.monitor.isPaused)")
-        case "retention": self.runRetention()
-        case "pause": self.monitor.isPaused = true; self.statusItemController.refreshAppearance()
-        case "resume": self.monitor.isPaused = false; self.statusItemController.refreshAppearance()
-        case "clear": self.store.clear(includingPinned: argument == "all")
+            if let first = store.allItems().first { store.setPinned(id: first.id, !first.pinned) }
+        case "filter": viewModel.filter = FilterKind(rawValue: argument ?? "All") ?? .all
+        case "select-right": viewModel.moveSelection(by: 1)
+        case "select-left": viewModel.moveSelection(by: -1)
+        case "confirm": viewModel.activateSelection(optionHeld: argument == "plain")
+        case "type": viewModel.appendSearch(argument ?? "")
+        case "backspace": _ = viewModel.deleteSearchBackward()
+        case "quick": viewModel.quickSelect(index: (Int(argument ?? "1") ?? 1) - 1, optionHeld: false)
+        case "settings": settingsWindow.show()
+        case "welcome": welcomeTip.show()
+        case "exclude": if let argument { settings.addExclusion(argument) }
+        case "unexclude": if let argument { settings.removeExclusion(argument) }
+        case "hotkey":
+            // e.g. "hotkey cmd,ctrl:9" → ⌃⌘9
+            if let argument, let spec = Self.parseHotKey(argument) { settings.hotKey = spec }
+        case "height": if let argument, let value = Double(argument) { settings.panelHeightFraction = value }
         default: Self.log.info("DEBUG unknown command \(command, privacy: .public)")
         }
+    }
+
+    private static func parseHotKey(_ spec: String) -> HotKeyDefinition? {
+        let parts = spec.split(separator: ":")
+        guard parts.count == 2, let keyCode = UInt32(parts[1]) else { return nil }
+        var mods: NSEvent.ModifierFlags = []
+        for m in parts[0].split(separator: ",") {
+            switch m { case "cmd": mods.insert(.command); case "ctrl": mods.insert(.control)
+            case "opt": mods.insert(.option); case "shift": mods.insert(.shift); default: break }
+        }
+        return HotKeyDefinition(keyCode: keyCode, modifiers: mods)
     }
     #endif
 }

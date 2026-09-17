@@ -208,12 +208,13 @@ final class HistoryStore: @unchecked Sendable {
 
     /// Deletes unpinned items older than the retention window, then evicts oldest unpinned items until the
     /// store is under the global byte cap. Pinned items are never touched.
-    func runRetention() {
+    func runRetention(maxAge: TimeInterval = Double(AppConfig.retentionDays) * 86_400,
+                      capBytes: Int64 = AppConfig.storeCapBytes) {
         var expired = 0
         var evicted = 0
         queue.sync {
             do {
-                let cutoff = Date().addingTimeInterval(-Double(AppConfig.retentionDays) * 86_400)
+                let cutoff = Date().addingTimeInterval(-maxAge)
                 let old = try db.query("SELECT \(Self.columns) FROM items WHERE pinned = 0 AND created_at < ?",
                                        [.date(cutoff)], Self.mapRow)
                 for item in old {
@@ -222,10 +223,10 @@ final class HistoryStore: @unchecked Sendable {
                 }
 
                 var total = try db.scalarInt("SELECT COALESCE(SUM(byte_size), 0) FROM items")
-                if total > AppConfig.storeCapBytes {
+                if total > capBytes {
                     let candidates = try db.query("SELECT \(Self.columns) FROM items WHERE pinned = 0 ORDER BY created_at ASC",
                                                   [], Self.mapRow)
-                    for item in candidates where total > AppConfig.storeCapBytes {
+                    for item in candidates where total > capBytes {
                         try deleteRowLocked(item)
                         total -= item.byteSize
                         evicted += 1

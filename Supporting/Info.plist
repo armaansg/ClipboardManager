@@ -28,5 +28,11 @@
 	<string>Local-only clipboard history. No network access.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUEnableAutomaticChecks</key>
+	<false/>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/OWNER/ClipboardManager/main/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>REPLACE_WITH_OUTPUT_OF_generate_keys</string>
 </dict>
 </plist>

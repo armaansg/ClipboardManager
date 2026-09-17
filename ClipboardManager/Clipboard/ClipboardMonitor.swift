@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import Foundation
 import os
 
@@ -115,6 +116,18 @@ final class ClipboardMonitor {
         let pasteboard = NSPasteboard.general
         guard pasteboard.changeCount == changeCount else { return } // superseded already
         let source = SourceApp.frontmost()
+
+        // Second line of defence behind the concealed-type flag: while a password field has secure
+        // keyboard input enabled, treat the clipboard as sensitive.
+        if IsSecureEventInputEnabled() {
+            Self.log.info("Skipped pasteboard change #\(changeCount): \(SkipReason.secureInput.rawValue, privacy: .public)")
+            return
+        }
+        let excluded = MainActor.assumeIsolated { AppSettings.shared.isExcluded(bundleID: source.bundleID) }
+        if excluded {
+            Self.log.info("Skipped pasteboard change #\(changeCount): \(SkipReason.excludedApp.rawValue, privacy: .public) (\(source.bundleID ?? "-", privacy: .public))")
+            return
+        }
 
         switch PasteboardReader.read(pasteboard) {
         case .skipped(.empty) where attempt < 2:

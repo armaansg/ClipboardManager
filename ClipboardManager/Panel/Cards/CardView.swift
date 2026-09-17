@@ -4,6 +4,7 @@ import SwiftUI
 struct CardView: View {
     let item: ClipItem
     let height: CGFloat
+    var quickIndex: Int?
 
     @EnvironmentObject private var viewModel: PanelViewModel
     @Environment(\.colorScheme) private var colorScheme
@@ -15,7 +16,7 @@ struct CardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            CardHeader(item: item, hideTrailing: isHovering)
+            CardHeader(item: item, quickIndex: quickIndex, hideTrailing: isHovering)
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
@@ -35,14 +36,31 @@ struct CardView: View {
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            SourceAppIcon(bundleID: item.sourceBundleID, appName: item.sourceAppName)
-                .padding(7)
+            HStack(spacing: 5) {
+                if isHovering, let name = item.sourceAppName {
+                    Text(name)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .transition(.opacity)
+                }
+                SourceAppIcon(bundleID: item.sourceBundleID, appName: item.sourceAppName)
+            }
+            .padding(7)
+            .background(
+                Capsule().fill(.thinMaterial).opacity(isHovering && item.sourceAppName != nil ? 1 : 0)
+                    .padding(3)
+            )
         }
         .clipShape(shape)
         .contentShape(shape)
         .scaleEffect(isHovering ? 1.015 : 1)
         .animation(.easeOut(duration: 0.12), value: isHovering)
-        .onTapGesture { viewModel.select(item) }
+        .onTapGesture {
+            let optionHeld = NSApp.currentEvent?.modifierFlags.contains(.option) ?? false
+            viewModel.select(item, optionHeld: optionHeld)
+        }
+        .onDrag { viewModel.dragProvider(for: item) }
         .onHover { hovering in
             isHovering = hovering
             if item.type == .text {
@@ -74,10 +92,19 @@ struct CardView: View {
 
 private struct CardHeader: View {
     let item: ClipItem
+    let quickIndex: Int?
     let hideTrailing: Bool
 
     var body: some View {
         HStack(spacing: 4) {
+            if let quickIndex {
+                Text("⌘\(quickIndex)")
+                    .font(.system(size: 9, weight: .semibold, design: .rounded))
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.12)))
+                    .help("Press ⌘\(quickIndex) to copy this item")
+            }
             Image(systemName: item.type.symbolName)
             Text(label)
                 .lineLimit(1)
@@ -87,8 +114,11 @@ private struct CardHeader: View {
                     Image(systemName: "pin.fill")
                         .foregroundStyle(Color.accentColor)
                 }
-                Text(item.createdAt, format: .relative(presentation: .named, unitsStyle: .abbreviated))
-                    .lineLimit(1)
+                // Ticks every 30 seconds so "now" turns into "1 min ago" without reopening the panel.
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    Text(Formatters.relative(item.createdAt, now: context.date))
+                        .lineLimit(1)
+                }
             }
         }
         .font(.caption2.weight(.medium))

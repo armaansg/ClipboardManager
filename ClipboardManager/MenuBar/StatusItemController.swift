@@ -14,6 +14,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         var clearHistory: (_ includingPinned: Bool) -> Void
         var storageDescription: () -> String
         var openStorageFolder: () -> Void
+        var openSettings: () -> Void
+        var checkForUpdates: () -> Void
+        var currentHotKey: () -> HotKeyDefinition
     }
 
     private static let log = Logger(subsystem: AppConfig.bundleID, category: "menubar")
@@ -30,7 +33,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             let image = NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: AppConfig.displayName)
             image?.isTemplate = true
             button.image = image
-            button.toolTip = "\(AppConfig.displayName) (\(AppConfig.toggleHotKey.displayString))"
             button.target = self
             button.action = #selector(handleClick(_:))
             // Assigning `statusItem.menu` directly would swallow left clicks, so both buttons are routed
@@ -46,7 +48,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         statusItem.button?.appearsDisabled = paused
         statusItem.button?.toolTip = paused
             ? "\(AppConfig.displayName) — recording paused"
-            : "\(AppConfig.displayName) (\(AppConfig.toggleHotKey.displayString))"
+            : "\(AppConfig.displayName) (\(actions.currentHotKey().displayString))"
     }
 
     // MARK: - Click routing
@@ -79,9 +81,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         let menu = NSMenu()
         menu.autoenablesItems = false
 
+        let hotKey = actions.currentHotKey()
         let toggle = NSMenuItem(title: actions.isPanelVisible() ? "Hide Clipboard Panel" : "Show Clipboard Panel",
-                                action: #selector(togglePanel), keyEquivalent: AppConfig.toggleHotKey.keyEquivalent)
-        toggle.keyEquivalentModifierMask = AppConfig.toggleHotKey.modifiers
+                                action: #selector(togglePanel), keyEquivalent: hotKey.keyEquivalent)
+        toggle.keyEquivalentModifierMask = hotKey.modifiers
         toggle.target = self
         menu.addItem(toggle)
 
@@ -110,6 +113,16 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         let openFolder = NSMenuItem(title: "Open Storage Folder", action: #selector(openStorageFolder), keyEquivalent: "")
         openFolder.target = self
         menu.addItem(openFolder)
+
+        menu.addItem(.separator())
+
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
+        let updates = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        updates.target = self
+        menu.addItem(updates)
 
         menu.addItem(.separator())
 
@@ -160,6 +173,10 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     @objc private func openStorageFolder() { actions.openStorageFolder() }
+
+    @objc private func openSettings() { actions.openSettings() }
+
+    @objc private func checkForUpdates() { actions.checkForUpdates() }
 }
 
 /// Thin wrapper over SMAppService.mainApp. Registration always targets the running bundle,

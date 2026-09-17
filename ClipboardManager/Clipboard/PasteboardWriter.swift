@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 /// Never simulates a paste keystroke.
 enum PasteboardWriter {
     /// Returns the pasteboard changeCount after writing, or nil if nothing could be written.
-    static func write(_ item: ClipItem, blobs: BlobStore) -> Int? {
+    static func write(_ item: ClipItem, blobs: BlobStore, plainText: Bool = false) -> Int? {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
 
@@ -13,7 +13,7 @@ enum PasteboardWriter {
         case .text:
             let pbItem = NSPasteboardItem()
             pbItem.setString(item.content, forType: .string)
-            if item.isRich, let rtf = blobs.data(for: item.blobPath) {
+            if item.isRich, !plainText, let rtf = blobs.data(for: item.blobPath) {
                 pbItem.setData(rtf, forType: .rtf)
             }
             guard pasteboard.writeObjects([pbItem]) else { return nil }

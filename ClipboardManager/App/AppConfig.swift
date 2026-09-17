@@ -50,9 +50,32 @@ enum AppConfig {
 }
 
 /// A global keyboard shortcut, expressed in Carbon terms so it can be registered with RegisterEventHotKey.
-struct HotKeyDefinition {
+struct HotKeyDefinition: Equatable {
     var keyCode: UInt32
     var modifiers: NSEvent.ModifierFlags
+
+    static let relevantModifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
+
+    /// Builds a definition from a key event, keeping only the modifier bits Carbon understands.
+    init(keyCode: UInt32, modifiers: NSEvent.ModifierFlags) {
+        self.keyCode = keyCode
+        self.modifiers = modifiers.intersection(Self.relevantModifiers)
+    }
+
+    init?(event: NSEvent) {
+        guard event.type == .keyDown else { return nil }
+        self.init(keyCode: UInt32(event.keyCode), modifiers: event.modifierFlags)
+    }
+
+    /// A usable global shortcut needs a real modifier (⌘, ⌃ or ⌥) or a function key; ⇧ alone would swallow typing.
+    var isUsableAsGlobalShortcut: Bool {
+        if fKeyIndex != nil { return true }
+        return !modifiers.intersection([.command, .control, .option]).isEmpty
+    }
+
+    static func == (lhs: HotKeyDefinition, rhs: HotKeyDefinition) -> Bool {
+        lhs.keyCode == rhs.keyCode && lhs.modifiers.rawValue == rhs.modifiers.rawValue
+    }
 
     var carbonModifiers: UInt32 {
         var flags: UInt32 = 0
