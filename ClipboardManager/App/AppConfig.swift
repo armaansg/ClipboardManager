@@ -98,7 +98,8 @@ struct HotKeyDefinition: Equatable {
         case kVK_RightArrow: return String(UnicodeScalar(NSRightArrowFunctionKey)!)
         case kVK_UpArrow: return String(UnicodeScalar(NSUpArrowFunctionKey)!)
         case kVK_DownArrow: return String(UnicodeScalar(NSDownArrowFunctionKey)!)
-        case kVK_F1...kVK_F12 where fKeyIndex != nil:
+        case _ where fKeyIndex != nil:
+            // Carbon's kVK_F* constants are not contiguous, so a range pattern is not an option here.
             return String(UnicodeScalar(NSF1FunctionKey + fKeyIndex!)!)
         default:
             return HotKeyDefinition.character(forKeyCode: keyCode).lowercased()

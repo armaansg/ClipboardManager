@@ -33,7 +33,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var retentionTimer: Timer?
     private var cancellables: Set<AnyCancellable> = []
 
+    /// True when running as the host for the unit-test bundle; the real app must stay dormant then.
+    static var isRunningTests: Bool { NSClassFromString("XCTestCase") != nil }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if Self.isRunningTests {
+            Self.log.info("Test host: skipping app setup")
+            return
+        }
         do {
             store = try HistoryStore(rootDirectory: AppConfig.storageRoot)
         } catch {

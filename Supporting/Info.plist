@@ -28,11 +28,12 @@
 	<string>Local-only clipboard history. No network access.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- Sparkle updates stay disabled until both values below are filled in. See README: "Distributing it". -->
 	<key>SUEnableAutomaticChecks</key>
 	<false/>
 	<key>SUFeedURL</key>
-	<string>https://raw.githubusercontent.com/OWNER/ClipboardManager/main/appcast.xml</string>
+	<string></string>
 	<key>SUPublicEDKey</key>
-	<string>REPLACE_WITH_OUTPUT_OF_generate_keys</string>
+	<string></string>
 </dict>
 </plist>

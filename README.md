@@ -20,7 +20,7 @@ There is no packaged download yet, so you build it yourself. It takes about two 
 1. Install Xcode from the Mac App Store (Xcode 16 or newer) and open it once to finish setup.
 2. Clone this repository:
    ```sh
-   git clone https://github.com/<your-username>/ClipboardManager.git
+   git clone https://github.com/YOUR-GITHUB-USERNAME/ClipboardManager.git
    cd ClipboardManager
    ```
 3. Build and install to `/Applications`:
@@ -129,7 +129,16 @@ off unless the user turns them on.
 
 ## For developers
 
+The project has a unit-test target covering the pasteboard reader, capture processor, image pipeline,
+history store (dedupe, retention, cap), and the panel view model (search, selection). CI runs it on every push.
+
 ```sh
+# run the tests
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+xcodebuild -project ClipboardManager.xcodeproj -scheme ClipboardManager -destination 'platform=macOS' test
+
+# build and run the app
+
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
 xcodebuild -project ClipboardManager.xcodeproj -scheme ClipboardManager -configuration Debug -derivedDataPath build build
 open build/Build/Products/Debug/ClipboardManager.app
@@ -151,7 +160,9 @@ ClipboardManager/
   Images/     compression, downscaling, thumbnails
   Panel/      non-activating NSPanel, glass backdrop, controller, SwiftUI panel + cards, hover preview, Copied HUD
   Support/    caches, formatters, code-detection heuristic
+ClipboardManagerTests/   XCTest unit tests
 Supporting/Info.plist    LSUIElement agent app
+.github/workflows/       CI (build + tests on a macOS runner)
 Scripts/                 build-release.sh (local install), release.sh (signed + notarized + appcast),
                          make-icon.swift (regenerates the app icon), debug-command.swift
 ```

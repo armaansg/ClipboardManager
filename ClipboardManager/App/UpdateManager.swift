@@ -36,7 +36,7 @@ final class UpdateManager: NSObject, ObservableObject {
         var problem: String?
         if key.isEmpty || key.count < 32 {
             problem = "This build has no update signing key (SUPublicEDKey), so it cannot check for updates."
-        } else if feed.isEmpty || feed.contains("OWNER") {
+        } else if feed.isEmpty || URL(string: feed)?.host == nil {
             problem = "This build has no update feed URL (SUFeedURL), so it cannot check for updates."
         } else {
             do {
