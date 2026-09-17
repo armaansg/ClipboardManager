@@ -13,6 +13,10 @@ with ⌘V in whatever app you were using.
 
 Requires macOS 14 Sonoma or later on Apple Silicon. On macOS 26 Tahoe the panel uses Liquid Glass.
 
+##Preview
+
+<img width="1916" height="584" alt="Screenshot 2026-09-17 at 1 01 11 PM" src="https://github.com/user-attachments/assets/6198c0bd-f829-4c52-9e1c-a0ca6d66000f" />
+
 ## Download
 
 **Homebrew** (recommended):
