@@ -10,6 +10,16 @@
 		C11B0A5D0000000000000022 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = C11B0A5D0000000000000021 /* Sparkle */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		C11B0A5D000000000000003A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C11B0A5D0000000000000008 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C11B0A5D0000000000000004;
+			remoteInfo = ClipboardManager;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		C11B0A5D0000000000000003 /* ClipboardManager.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClipboardManager.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C11B0A5D0000000000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -28,24 +38,6 @@
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
-
-/* Begin PBXContainerItemProxy section */
-		C11B0A5D000000000000003A /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = C11B0A5D0000000000000008 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = C11B0A5D0000000000000004;
-			remoteInfo = ClipboardManager;
-		};
-/* End PBXContainerItemProxy section */
-
-/* Begin PBXTargetDependency section */
-		C11B0A5D0000000000000039 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = C11B0A5D0000000000000004 /* ClipboardManager */;
-			targetProxy = C11B0A5D000000000000003A /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		C11B0A5D0000000000000006 /* Frameworks */ = {
@@ -217,6 +209,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C11B0A5D0000000000000039 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C11B0A5D0000000000000004 /* ClipboardManager */;
+			targetProxy = C11B0A5D000000000000003A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		C11B0A5D000000000000000C /* Debug */ = {

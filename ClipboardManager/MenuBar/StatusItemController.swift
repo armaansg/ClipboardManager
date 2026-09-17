@@ -77,7 +77,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
     // MARK: - Menu
 
-    private func buildMenu() -> NSMenu {
+    /// Internal so tests can build the real menu.
+    func buildMenu() -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
 
